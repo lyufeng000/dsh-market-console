@@ -1,0 +1,25 @@
+# ============================================================================
+# dsh-market-console —— DSH bundle patch（挂载声明）
+# ============================================================================
+# DSH 启动时按 bundle 层叠加各插件的 patch，本文件把「插件市场控制台」
+# 插入目标 profile 的配置树。
+#
+# 这一行同时是两件事：
+#   1. Host 半边（lib/index.js）的 Loader 行 —— 空实现，只为占位；
+#   2. 浏览器名册来源 —— @deepseek-ai/dsh-client-modules 会扫描已启用的
+#      Loader 条目，发现本包 package.json 的 `dsh.client` 声明后把
+#      lib/client.js 提供给页面。**客户端半边不需要单独的挂载行。**
+#
+# 安装（与 dsh-whale-widget 同一套路）：
+#   ① 包放进 <DSH_HOME>/profiles/node_modules/dsh-market-console/
+#   ② 在 <DSH_HOME>/profiles/<profile>/package.json 的 dependencies 里登记
+#   ③ 把下面的 insert 块追加到 <DSH_HOME>/profiles/<profile>/cordis.patch.yml
+#   ④ 重启客户端（cordis.patch.yml 只在启动时读取，刷新页面无效）
+#
+# 注意：客户端大版本更新可能重写 profile 的 cordis.patch.yml，导致这一行
+# 丢失（表现为「插件文件在但界面没有」）。插件页里有对应的自诊断提示。
+# ============================================================================
+
+- insert:
+    - id: market-console
+      name: dsh-market-console

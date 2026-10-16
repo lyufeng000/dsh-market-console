@@ -1,0 +1,57 @@
+{
+  "name": "dsh-market-console",
+  "version": "0.1.0",
+  "description": "DSH 插件市场控制台：在「设置 → 插件」分区里搜索、安装、启停、删除第三方 DSH 插件。",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "marketplace",
+    "market",
+    "plugin-manager"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "scripts",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-modules",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4"
+  },
+  "author": "lyufeng000",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lyufeng000/dsh-market-console.git"
+  },
+  "homepage": "https://github.com/lyufeng000/dsh-market-console#readme",
+  "bugs": {
+    "url": "https://github.com/lyufeng000/dsh-market-console/issues"
+  }
+}
