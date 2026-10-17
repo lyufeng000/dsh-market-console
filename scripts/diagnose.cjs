@@ -204,6 +204,8 @@ async function fetchBundle(url) {
 
 	// ───── 挂载登记 ─────
 	section('3. 挂载登记');
+	let inBundles = false;
+	let hasInsert = false;
 	const profileManifestPath = path.join(profileDir, 'package.json');
 	if (fs.existsSync(profileManifestPath)) {
 		try {
@@ -212,20 +214,33 @@ async function fetchBundle(url) {
 			if (Object.prototype.hasOwnProperty.call(deps, PKG)) ok('dependencies 已登记 ' + PKG + ' = ' + deps[PKG]);
 			else bad('profile 的 dependencies 里没有 ' + PKG, '跑 scripts\\install.cmd。');
 			const bundles = (pm.dsh && pm.dsh.profile && pm.dsh.profile.bundles) || [];
-			if (bundles.includes(PKG)) {
-				warn('该包同时出现在 dsh.profile.bundles 里');
-				SUGGESTIONS.push('别把它加进 bundles：bundle patch 与 cordis.patch.yml 会产生两条同 id 的 insert。');
-			}
+			inBundles = bundles.includes(PKG);
 		} catch (error) { bad('profile package.json 解析失败：' + error.message); }
 	} else skip('profile package.json 不存在');
 
 	const patchPath = path.join(profileDir, 'cordis.patch.yml');
 	if (fs.existsSync(patchPath)) {
 		const patch = fs.readFileSync(patchPath, 'utf8');
-		if (new RegExp('id:\\s*[\'"]?' + ENTRY_ID + '[\'"]?').test(patch)) ok('cordis.patch.yml 含挂载行（id: ' + ENTRY_ID + '）');
-		else bad('cordis.patch.yml 里没有挂载行（id: ' + ENTRY_ID + '）',
-			'客户端大版本更新会重写这个文件。跑 scripts\\install.cmd 重新追加，然后重启。');
+		// 只把 insert 块里的行算作挂载；`- id: market-console disabled: false` 之类
+		// 由 0.2.1 插件页写入的覆盖行不是挂载声明。
+		const insertId = new RegExp('^\\s*-\\s*id:\\s*[\'"]?' + ENTRY_ID + '[\'"]?\\s*$', 'm');
+		hasInsert = patch
+			.split(/\r?\n(?=- )/)
+			.filter((block) => /^-\s+insert:/m.test(block))
+			.some((block) => insertId.test(block));
 	} else skip('cordis.patch.yml 不存在');
+
+	if (inBundles && hasInsert) {
+		warn('同时存在两种挂载：dsh.profile.bundles 与 cordis.patch.yml 的 insert 块');
+		SUGGESTIONS.push('只保留一种挂载：建议留在 dsh.profile.bundles（0.2.1 插件页按它管理），删掉 cordis.patch.yml 里的 insert 块。');
+	} else if (inBundles) {
+		ok('dsh.profile.bundles 已选择 ' + PKG + '（0.2.1 原生挂载）');
+	} else if (hasInsert) {
+		ok('cordis.patch.yml 含 insert 挂载行（id: ' + ENTRY_ID + '）');
+	} else {
+		bad('没有找到挂载：dsh.profile.bundles 与 cordis.patch.yml 的 insert 块都没有 ' + PKG,
+			'把包加进 dsh.profile.bundles（0.2.1 推荐），或跑 scripts\\install.cmd 追加 insert 后重启客户端。');
+	}
 
 	// ───── 运行实例 ─────
 	section('4. 运行中的实例（' + BASE_URL + '）');

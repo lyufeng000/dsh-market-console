@@ -4,11 +4,15 @@
     从当前（或指定）DSH profile 卸载 dsh-market-console。
 
 .DESCRIPTION
-    完整反向 install.ps1 做的三件事：
+    完整反向 install.ps1 做的三件事，并额外清理 0.2.1 的 bundle 选择：
 
         ① 从 <profileDir>/cordis.patch.yml 删掉挂载行
         ② 从 <profileDir>/package.json 的 dependencies 删掉登记
-        ③ 删掉 <DSH_HOME>/profiles/node_modules/dsh-market-console
+        ③ 从 <profileDir>/package.json 的 dsh.profile.bundles 删掉选择
+        ④ 删掉 <DSH_HOME>/profiles/node_modules/dsh-market-console
+
+    DSH 0.2.1 起「插件页」按 dsh.profile.bundles 管理组合包；本包若只从
+    dependencies 摘掉却留在 bundles 里，下次启动会变成无法解析的悬挂条目。
 
     profile 解析顺序与 install.ps1 一致（C1）：
         DSH_DESKTOP_PROFILE  →  DSH_PROFILE  →  DSH_PROFILE_DIR 反推  →  web
@@ -141,25 +145,39 @@ if (-not (Test-Path $PatchPath)) {
     }
 }
 
-# ── ② 摘掉 dependencies ────────────────────────────────────────────────
-Write-Section '② 从 profile 的 dependencies 摘掉登记'
+# ── ② 摘掉 dependencies 与 dsh.profile.bundles ─────────────────────────
+Write-Section '② 从 profile 的 package.json 摘掉登记'
 $ManifestPath = Join-Path $ProfileDir 'package.json'
 if (-not (Test-Path $ManifestPath)) {
     Write-Skip 'package.json 不存在，跳过'
 } else {
     $manifest = Get-Content $ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    $has = $manifest.dependencies -and ($manifest.dependencies.PSObject.Properties.Name -contains $PackageName)
-    if (-not $has) {
-        Write-Skip "dependencies 里没有 $PackageName"
+    $hasDep = [bool]($manifest.dependencies -and ($manifest.dependencies.PSObject.Properties.Name -contains $PackageName))
+    $bundleList = $null
+    if ($manifest.dsh -and $manifest.dsh.profile -and $manifest.dsh.profile.bundles) {
+        $bundleList = @($manifest.dsh.profile.bundles)
+    }
+    $hasBundle = [bool]($bundleList -and ($bundleList -contains $PackageName))
+    if (-not $hasDep -and -not $hasBundle) {
+        Write-Skip "dependencies 与 dsh.profile.bundles 里都没有 $PackageName"
     } elseif ($WhatIf) {
-        Write-Dry "将删除 dependencies.$PackageName"
+        if ($hasDep) { Write-Dry "将删除 dependencies.$PackageName" }
+        if ($hasBundle) { Write-Dry "将从 dsh.profile.bundles 移除 $PackageName" }
     } else {
         Copy-Item $ManifestPath "$ManifestPath.bak-$stamp" -Force
         Write-Ok "备份：$ManifestPath.bak-$stamp"
-        $manifest.dependencies.PSObject.Properties.Remove($PackageName)
+        if ($hasDep) {
+            $manifest.dependencies.PSObject.Properties.Remove($PackageName)
+            Write-Ok "已摘掉 dependencies.$PackageName"
+        }
+        if ($hasBundle) {
+            # 强制 [object[]]：Windows PowerShell 5.1 的 ConvertTo-Json 对单元素数组
+            # 会退化成字符串，导致下一次启动读不到 bundles 列表。
+            $manifest.dsh.profile.bundles = [object[]]@($bundleList | Where-Object { $_ -ne $PackageName })
+            Write-Ok "已从 dsh.profile.bundles 移除 $PackageName"
+        }
         $json = ($manifest | ConvertTo-Json -Depth 100) + "`n"
         [System.IO.File]::WriteAllText($ManifestPath, $json, $Utf8NoBom)
-        Write-Ok "已摘掉 dependencies.$PackageName"
     }
 }
 
@@ -188,5 +206,11 @@ if ($KeepPackage) {
 
 Write-Host ''
 Write-Host '───────────────────────────────────────────────────────────────' -ForegroundColor DarkGray
-Write-Host ' 卸载完成。重启客户端后「插件市场」标签页会消失。' -ForegroundColor Yellow
+if ($KeepPackage) {
+    Write-Host ' 卸载完成（-KeepPackage：包文件保留）。' -ForegroundColor Yellow
+} else {
+    Write-Host ' 卸载完成。' -ForegroundColor Yellow
+}
+Write-Host ' 挂载行、dependencies 与 dsh.profile.bundles 选择均已摘除；' -ForegroundColor Yellow
+Write-Host ' 重启客户端后「插件市场」标签页会消失。' -ForegroundColor Yellow
 Write-Host '───────────────────────────────────────────────────────────────' -ForegroundColor DarkGray
